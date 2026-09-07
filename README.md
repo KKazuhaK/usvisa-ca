@@ -49,6 +49,33 @@ CONSULATES = {
 } # Only Toronto and Vancouver consulates are verified
 ```
 
+## Docker / NAS deployment
+
+Prebuilt multi-architecture images for `linux/amd64` and `linux/arm64` are
+published to GitHub Container Registry:
+
+```sh
+docker pull ghcr.io/kkazuhak/usvisa-ca:latest
+```
+
+For a NAS deployment, download `compose.yml` and `.env.example`, then:
+
+```sh
+cp .env.example .env
+# Edit .env and keep TEST_MODE=true for the first run.
+docker compose up -d
+docker compose logs -f usvisa-ca
+```
+
+No inbound port is required. The `./data` directory stores a completion marker
+after a successful reschedule, so a NAS or container restart will not start a
+second booking attempt. To intentionally start a new search, stop the container,
+delete `data/reschedule-complete`, update `.env`, and start it again.
+
+Images are built by GitHub Actions on pushes to `main`. A tag such as `v1.2.3`
+also publishes `1.2.3` and `1.2` image tags. The package must be public in the
+repository's GitHub Packages settings for anonymous `docker pull` access.
+
 Add a new `.env` file to the root of the project, this file will be used to configure parameters for the script. You can use the following parameters:
 
 ```
@@ -76,7 +103,9 @@ You can add upto 9 exclusion date ranges. Each date range to be excluded using t
 python reschedule.py
 ```
 
-See the script in action. Once you're satisfied with its functionality, set `TEST_MODE` to `False` in `settings.py`. For a headless operation, you can also set `SHOW_GUI` to `False` and allow the script to run unattended.
+See the script in action. `TEST_MODE` defaults to `True`; once you're satisfied
+with its functionality, set `TEST_MODE=false` in `.env`. For headless operation,
+leave `SHOW_GUI=false` and allow the script to run unattended.
 
 Note `detect_and_notify.py` is no longer maintained.
 

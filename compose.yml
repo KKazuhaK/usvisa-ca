@@ -1,0 +1,13 @@
+services:
+  usvisa-ca:
+    image: ghcr.io/kkazuhak/usvisa-ca:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      COMPLETION_FILE: /data/reschedule-complete
+      IDLE_AFTER_SUCCESS: "true"
+      TZ: America/Vancouver
+    volumes:
+      - ./data:/data
+    shm_size: 512m

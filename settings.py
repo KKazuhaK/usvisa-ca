@@ -1,13 +1,22 @@
 from dotenv import load_dotenv
 import os
 from datetime import datetime
+
+
+def env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # Load environment variables
 load_dotenv()
 
 # Account Info
 USER_EMAIL = os.getenv("USER_EMAIL")
 USER_PASSWORD = os.getenv("USER_PASSWORD")
-NUM_PARTICIPANTS = 1
+NUM_PARTICIPANTS = int(os.getenv("NUM_PARTICIPANTS", "1"))
 
 # Say you want an appointment no later than Mar 14, 2024
 # Please strictly follow the YYYY-MM-DD format for all dates
@@ -50,6 +59,7 @@ CONSULATES = {
 } # Only Toronto and Vancouver consulates are verified
 # Choose a city from the list above
 USER_CONSULATE = os.getenv("USER_CONSULATE")
+CONSULATE_ID = CONSULATES.get(USER_CONSULATE)
 
 # The following is only required for the Gmail notification feature
 # Gmail login info
@@ -65,11 +75,16 @@ RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 # from local import *
 
 # See the automation in action
-SHOW_GUI = False  # toggle to false if you don't want to see the browser
+SHOW_GUI = env_bool("SHOW_GUI", False)
 
 # If you just want to see the program run WITHOUT clicking the confirm reschedule button
 # For testing, also set a date really far away so the app actually tries to reschedule
-TEST_MODE = False
+TEST_MODE = env_bool("TEST_MODE", True)
+
+# Container deployments can persist this marker to avoid rescheduling again
+# after Docker or the NAS restarts. Leave it empty for the traditional behavior.
+COMPLETION_FILE = os.getenv("COMPLETION_FILE", "").strip()
+IDLE_AFTER_SUCCESS = env_bool("IDLE_AFTER_SUCCESS", False)
 
 # Don't change the following unless you know what you are doing
 DETACH = True
@@ -81,7 +96,7 @@ DATE_REQUEST_DELAY = 180
 DATE_REQUEST_MAX_RETRY = 5
 DATE_REQUEST_MAX_TIME = 15 * 60
 LOGIN_URL = "https://ais.usvisa-info.com/en-ca/niv/users/sign_in"
-AVAILABLE_DATE_REQUEST_SUFFIX = f"/days/{CONSULATES[USER_CONSULATE]}.json?appointments[expedite]=false"
+AVAILABLE_DATE_REQUEST_SUFFIX = f"/days/{CONSULATE_ID}.json?appointments[expedite]=false"
 APPOINTMENT_PAGE_URL = "https://ais.usvisa-info.com/en-ca/niv/schedule/{id}/appointment"
 PAYMENT_PAGE_URL = "https://ais.usvisa-info.com/en-ca/niv/schedule/{id}/payment"
 REQUEST_HEADERS = {
