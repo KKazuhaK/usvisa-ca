@@ -112,6 +112,20 @@ def idle_after_completion() -> None:
         sleep(3600)
 
 
+def capture_diagnostics(driver: WebDriver, label: str) -> None:
+    if not DIAGNOSTICS_DIR:
+        return
+    try:
+        os.makedirs(DIAGNOSTICS_DIR, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        path = os.path.join(DIAGNOSTICS_DIR, f"{label}-{timestamp}.png")
+        driver.save_screenshot(path)
+        log_message(f"Saved browser screenshot to {path}")
+        log_message(f"Browser page title: {driver.title}")
+    except Exception as error:
+        log_message(f"Unable to save browser diagnostics: {error}")
+
+
 def login(driver: WebDriver) -> None:
     driver.get(LOGIN_URL)
     timeout = TIMEOUT
@@ -306,26 +320,29 @@ def reschedule(driver: WebDriver, retryCount: int = 0) -> bool:
 
 
 def reschedule_with_new_session(retryCount: int = DATE_REQUEST_MAX_RETRY) -> bool:
-    driver = get_chrome_driver()
-    session_failures = 0
-    timeout = TIMEOUT
-    while session_failures < NEW_SESSION_AFTER_FAILURES:
+    for session_attempt in range(1, NEW_SESSION_AFTER_FAILURES + 1):
+        driver = None
         try:
+            driver = get_chrome_driver()
             login(driver)
             get_appointment_page(driver)
             _prepare_appointment_page(driver)
-            break
+            try:
+                return reschedule(driver, retryCount)
+            finally:
+                driver.quit()
         except Exception as e:
-            log_message(f"Unable to get appointment page at {driver.current_url}: {e}")
-            session_failures += 1
-            sleep(FAIL_RETRY_DELAY)
-            continue
-    rescheduled = reschedule(driver, retryCount)
-    driver.quit()
-    if rescheduled:
-        return True
-    else:
-        return False
+            current_url = driver.current_url if driver else "browser startup"
+            log_message(
+                f"Unable to get appointment page at {current_url}: "
+                f"{type(e).__name__}: {e}"
+            )
+            if driver:
+                capture_diagnostics(driver, f"session-{session_attempt}")
+                driver.quit()
+            if session_attempt < NEW_SESSION_AFTER_FAILURES:
+                sleep(FAIL_RETRY_DELAY)
+    return False
 
 
 if __name__ == "__main__":

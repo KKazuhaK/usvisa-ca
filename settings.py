@@ -85,6 +85,7 @@ TEST_MODE = env_bool("TEST_MODE", True)
 # after Docker or the NAS restarts. Leave it empty for the traditional behavior.
 COMPLETION_FILE = os.getenv("COMPLETION_FILE", "").strip()
 IDLE_AFTER_SUCCESS = env_bool("IDLE_AFTER_SUCCESS", False)
+DIAGNOSTICS_DIR = os.getenv("DIAGNOSTICS_DIR", "").strip()
 
 # Don't change the following unless you know what you are doing
 DETACH = True

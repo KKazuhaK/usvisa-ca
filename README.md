@@ -71,6 +71,9 @@ No inbound port is required. The `./data` directory stores a completion marker
 after a successful reschedule, so a NAS or container restart will not start a
 second booking attempt. To intentionally start a new search, stop the container,
 delete `data/reschedule-complete`, update `.env`, and start it again.
+Failed browser sessions save screenshots under `data/diagnostics` to make
+headless login and site-layout problems easier to diagnose. Review screenshots
+for personal information before sharing them.
 
 Images are built by GitHub Actions on pushes to `main`. A tag such as `v1.2.3`
 also publishes `1.2.3` and `1.2` image tags. The package must be public in the
