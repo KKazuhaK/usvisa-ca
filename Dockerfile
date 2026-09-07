@@ -19,8 +19,8 @@ RUN apt-get update \
         tini \
         tzdata \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system app \
-    && useradd --system --gid app --create-home app \
+    && groupadd --gid 1000 app \
+    && useradd --uid 1000 --gid app --create-home app \
     && mkdir -p /app /data \
     && chown app:app /app /data
 

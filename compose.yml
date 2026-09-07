@@ -2,10 +2,12 @@ services:
   usvisa-ca:
     image: ghcr.io/kkazuhak/usvisa-ca:latest
     restart: unless-stopped
+    user: "1000:10"
     env_file:
       - .env
     environment:
       COMPLETION_FILE: /data/reschedule-complete
+      DIAGNOSTICS_DIR: /data/diagnostics
       IDLE_AFTER_SUCCESS: "true"
       TZ: America/Vancouver
     volumes:
