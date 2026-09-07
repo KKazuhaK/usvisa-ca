@@ -1,4 +1,5 @@
 import re
+import os
 import traceback
 from datetime import datetime
 from time import sleep
@@ -6,6 +7,7 @@ from typing import Union, List
 
 import requests
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
@@ -24,6 +26,9 @@ def log_message(message: str) -> None:
 
 def get_chrome_driver() -> WebDriver:
     options = webdriver.ChromeOptions()
+    chrome_binary = os.getenv("CHROME_BIN")
+    if chrome_binary:
+        options.binary_location = chrome_binary
     if not SHOW_GUI:
         options.add_argument("headless")
         options.add_argument("window-size=1920x1080")
@@ -34,8 +39,77 @@ def get_chrome_driver() -> WebDriver:
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument(f'--user-data-dir=/tmp/chrome-{datetime.now().strftime("%Y%m%d-%H%M%S")}')
-    driver = webdriver.Chrome(options=options)
+    chromedriver_path = os.getenv("CHROMEDRIVER_PATH")
+    service = Service(executable_path=chromedriver_path) if chromedriver_path else Service()
+    driver = webdriver.Chrome(service=service, options=options)
     return driver
+
+
+def validate_settings() -> None:
+    missing = [
+        name for name, value in (
+            ("USER_EMAIL", USER_EMAIL),
+            ("USER_PASSWORD", USER_PASSWORD),
+            ("EARLIEST_ACCEPTABLE_DATE", EARLIEST_ACCEPTABLE_DATE),
+            ("LATEST_ACCEPTABLE_DATE", LATEST_ACCEPTABLE_DATE),
+            ("USER_CONSULATE", USER_CONSULATE),
+        ) if not value
+    ]
+    if missing:
+        raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+    if CONSULATE_ID is None:
+        raise ValueError(
+            f"Unsupported USER_CONSULATE '{USER_CONSULATE}'. "
+            f"Choose one of: {', '.join(CONSULATES)}"
+        )
+    earliest = datetime.strptime(EARLIEST_ACCEPTABLE_DATE, "%Y-%m-%d").date()
+    latest = datetime.strptime(LATEST_ACCEPTABLE_DATE, "%Y-%m-%d").date()
+    if earliest > latest:
+        raise ValueError("EARLIEST_ACCEPTABLE_DATE must not be after LATEST_ACCEPTABLE_DATE")
+
+
+def email_is_configured() -> bool:
+    return all((GMAIL_EMAIL, GMAIL_APPLICATION_PWD, RECEIVER_EMAIL))
+
+
+def send_email(subject: str, text: str) -> None:
+    if not email_is_configured():
+        log_message("Email notification skipped because Gmail settings are incomplete")
+        return
+    try:
+        gmail = GMail(f"{GMAIL_SENDER_NAME or GMAIL_EMAIL} <{GMAIL_EMAIL}>", GMAIL_APPLICATION_PWD)
+        msg = Message(
+            subject,
+            to=f"{RECEIVER_NAME or RECEIVER_EMAIL} <{RECEIVER_EMAIL}>",
+            text=text,
+        )
+        gmail.send(msg)
+        gmail.close()
+    except Exception as error:
+        # A notification failure must never trigger another booking attempt.
+        log_message(f"Email notification failed: {error}")
+
+
+def completion_exists() -> bool:
+    return bool(COMPLETION_FILE and os.path.exists(COMPLETION_FILE))
+
+
+def mark_completed() -> None:
+    if not COMPLETION_FILE:
+        return
+    parent = os.path.dirname(COMPLETION_FILE)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(COMPLETION_FILE, "w", encoding="utf-8") as marker:
+        marker.write(datetime.now().isoformat() + "\n")
+
+
+def idle_after_completion() -> None:
+    if not IDLE_AFTER_SUCCESS:
+        return
+    log_message("Appointment task is complete; container is idling")
+    while True:
+        sleep(3600)
 
 
 def login(driver: WebDriver) -> None:
@@ -202,22 +276,22 @@ def reschedule(driver: WebDriver, retryCount: int = 0) -> bool:
         latest_acceptable_date = datetime.strptime(LATEST_ACCEPTABLE_DATE, "%Y-%m-%d").date()
         if earliest_acceptable_date <= earliest_available_date <= latest_acceptable_date:
             # Check if the earliest available date falls in any of the excluded date ranges
+            excluded = False
             for i, (start, end) in enumerate(EXCLUSION_DATE_RANGES, 1):
                 if datetime.strptime(start, "%Y-%m-%d").date() <= earliest_available_date <= datetime.strptime(end, "%Y-%m-%d").date():
                     log_message(f"UH OH! Date falls in excluded date range: {start} to {end}")
-                    sleep(DATE_REQUEST_DELAY)
-                    continue
+                    excluded = True
+                    break
+            if excluded:
+                sleep(DATE_REQUEST_DELAY)
+                continue
             log_message(f"FOUND SLOT ON {earliest_available_date}!!!")
             try:
                 if legacy_reschedule(driver, earliest_available_date):
-                    gmail = GMail(f"{GMAIL_SENDER_NAME} <{GMAIL_EMAIL}>", GMAIL_APPLICATION_PWD)
-                    msg = Message(
+                    send_email(
                         f"Visa Appointment Rescheduled for {earliest_available_date}",
-                        to=f"{RECEIVER_NAME} <{RECEIVER_EMAIL}>",
-                        text=f"Your visa appointment has been successfully rescheduled to {earliest_available_date} at {USER_CONSULATE} consulate."
+                        f"Your visa appointment has been successfully rescheduled to {earliest_available_date} at {USER_CONSULATE} consulate.",
                     )
-                    gmail.send(msg)
-                    gmail.close()
                     log_message("SUCCESSFULLY RESCHEDULED!!!")
                     return True
                 return False
@@ -255,6 +329,12 @@ def reschedule_with_new_session(retryCount: int = DATE_REQUEST_MAX_RETRY) -> boo
 
 
 if __name__ == "__main__":
+    validate_settings()
+    if completion_exists():
+        log_message(f"Completion marker found at {COMPLETION_FILE}; no booking will be attempted")
+        idle_after_completion()
+        raise SystemExit(0)
+
     session_count = 0
     log_message(f"Attempting to reschedule for email: {USER_EMAIL}")
     log_message(f"User Consulate: {USER_CONSULATE}")
@@ -272,14 +352,12 @@ if __name__ == "__main__":
         session_count += 1
         log_message(f"Attempting with new session #{session_count}")
         rescheduled = reschedule_with_new_session()
-        sleep(NEW_SESSION_DELAY)
         if rescheduled:
             break
-    gmail = GMail(f"{GMAIL_SENDER_NAME} <{GMAIL_EMAIL}>", GMAIL_APPLICATION_PWD)
-    msg = Message(
+        sleep(NEW_SESSION_DELAY)
+    mark_completed()
+    send_email(
         f"Rescheduler Program Exited",
-        to=f"{RECEIVER_NAME} <{RECEIVER_EMAIL}>",
-        text=f"The rescheduler program has exited on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}."
+        f"The rescheduler program has exited on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.",
     )
-    gmail.send(msg)
-    gmail.close()
+    idle_after_completion()
