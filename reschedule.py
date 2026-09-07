@@ -12,7 +12,7 @@ from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select, WebDriverWait
 
 from legacy.gmail import GMail, Message
 from legacy_rescheduler import legacy_reschedule
@@ -190,6 +190,10 @@ def _appointment_page_state(driver: WebDriver):
         driver, (By.ID, "appointments_consulate_appointment_date_input")
     ):
         return "ready"
+    if _has_visible_element(
+        driver, (By.ID, "appointments_consulate_appointment_facility_id")
+    ):
+        return "facility"
     if _find_visible_action(driver, "Schedule Appointment"):
         return "schedule"
     if _has_visible_element(driver, (By.CLASS_NAME, "icheckbox")):
@@ -203,6 +207,16 @@ def _prepare_appointment_page(driver: WebDriver) -> None:
         state = WebDriverWait(driver, timeout).until(_appointment_page_state)
         if state == "ready":
             return
+        if state == "facility":
+            facility = WebDriverWait(driver, timeout).until(
+                EC.element_to_be_clickable(
+                    (By.ID, "appointments_consulate_appointment_facility_id")
+                )
+            )
+            Select(facility).select_by_value(str(CONSULATE_ID))
+            log_message(f"Selected {USER_CONSULATE} consulate")
+            sleep(2)
+            continue
         if state == "schedule":
             _click_action_if_present(driver, "Schedule Appointment", timeout)
             continue
