@@ -1,6 +1,5 @@
 FROM python:3.12-slim-bookworm
 
-LABEL org.opencontainers.image.source="https://github.com/KKazuhaK/usvisa-ca"
 LABEL org.opencontainers.image.description="US visa appointment rescheduler for Canada"
 LABEL org.opencontainers.image.licenses="GPL-3.0"
 

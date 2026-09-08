@@ -55,7 +55,7 @@ Prebuilt multi-architecture images for `linux/amd64` and `linux/arm64` are
 published to GitHub Container Registry:
 
 ```sh
-docker pull ghcr.io/kkazuhak/usvisa-ca:latest
+docker pull ghcr.io/kcajc/usvisa-ca:latest
 ```
 
 For a NAS deployment, download `compose.yml` and `.env.example`, then:
@@ -63,6 +63,7 @@ For a NAS deployment, download `compose.yml` and `.env.example`, then:
 ```sh
 cp .env.example .env
 # Edit .env and keep TEST_MODE=true for the first run.
+mkdir -p data/diagnostics data/state
 docker compose up -d
 docker compose logs -f usvisa-ca
 ```
@@ -70,7 +71,7 @@ docker compose logs -f usvisa-ca
 No inbound port is required. The `./data` directory stores a completion marker
 after a successful reschedule, so a NAS or container restart will not start a
 second booking attempt. To intentionally start a new search, stop the container,
-delete `data/reschedule-complete`, update `.env`, and start it again.
+delete `data/state/reschedule-complete`, update `.env`, and start it again.
 Failed browser sessions save screenshots under `data/diagnostics` to make
 headless login and site-layout problems easier to diagnose. Review screenshots
 for personal information before sharing them.
