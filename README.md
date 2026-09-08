@@ -75,6 +75,44 @@ Failed browser sessions save screenshots under `data/diagnostics` to make
 headless login and site-layout problems easier to diagnose. Review screenshots
 for personal information before sharing them.
 
+### Notifications
+
+Notifications are sent after a successful reschedule. SMTP and Telegram are
+independent: configure either one or both. A notification failure does not turn
+a successful booking into a failure or trigger another booking attempt.
+
+Generic SMTP with STARTTLS (commonly port 587):
+
+```env
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURITY=starttls
+SMTP_USERNAME=notification@example.com
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM=Visa Bot <notification@example.com>
+SMTP_TO=recipient@example.com
+```
+
+For implicit TLS, commonly on port 465, use `SMTP_SECURITY=ssl`. For a trusted
+local mail relay that does not use authentication, leave `SMTP_USERNAME` and
+`SMTP_PASSWORD` empty. `SMTP_SECURITY=none` disables transport encryption and
+should only be used on a trusted local network.
+
+Telegram Bot:
+
+```env
+TELEGRAM_BOT_TOKEN=123456789:replace-with-your-bot-token
+TELEGRAM_CHAT_ID=replace-with-your-chat-id
+```
+
+Set `NOTIFY_ON_STARTUP=true` temporarily to send a startup message through every
+configured channel. Change it back to `false` after verifying delivery, or a
+message will be sent every time the container restarts.
+
+The previous Gmail variables remain supported and are translated to
+`smtp.gmail.com:587` with STARTTLS. Gmail requires an application password; do
+not use or share the normal account password.
+
 Images are built by GitHub Actions on pushes to `main`. A tag such as `v1.2.3`
 also publishes `1.2.3` and `1.2` image tags. The package must be public in the
 repository's GitHub Packages settings for anonymous `docker pull` access.
