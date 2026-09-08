@@ -6,7 +6,7 @@ services:
     env_file:
       - .env
     environment:
-      COMPLETION_FILE: /data/reschedule-complete
+      COMPLETION_FILE: /data/state/reschedule-complete
       DIAGNOSTICS_DIR: /data/diagnostics
       IDLE_AFTER_SUCCESS: "true"
       TZ: America/Vancouver

@@ -24,6 +24,10 @@ RUN apt-get update \
     && mkdir -p /app /data \
     && chown app:app /app /data
 
+ENV COMPLETION_FILE=/data/state/reschedule-complete \
+    DIAGNOSTICS_DIR=/data/diagnostics \
+    IDLE_AFTER_SUCCESS=true
+
 WORKDIR /app
 
 COPY requirements.txt ./
