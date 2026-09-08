@@ -90,6 +90,26 @@ def send_email(subject: str, text: str) -> None:
         log_message(f"Email notification failed: {error}")
 
 
+def date_is_excluded(appointment_date) -> bool:
+    return any(
+        datetime.strptime(start, "%Y-%m-%d").date()
+        <= appointment_date
+        <= datetime.strptime(end, "%Y-%m-%d").date()
+        for start, end in EXCLUSION_DATE_RANGES
+    )
+
+
+def acceptable_dates(dates):
+    earliest = datetime.strptime(EARLIEST_ACCEPTABLE_DATE, "%Y-%m-%d").date()
+    latest = datetime.strptime(LATEST_ACCEPTABLE_DATE, "%Y-%m-%d").date()
+    return sorted(
+        appointment_date
+        for appointment_date in dates
+        if earliest <= appointment_date <= latest
+        and not date_is_excluded(appointment_date)
+    )
+
+
 def completion_exists() -> bool:
     return bool(COMPLETION_FILE and os.path.exists(COMPLETION_FILE))
 
@@ -299,20 +319,9 @@ def reschedule(driver: WebDriver, retryCount: int = 0) -> bool:
             log_message("Error occured when requesting available dates")
             sleep(DATE_REQUEST_DELAY)
             continue
-        earliest_available_date = dates[0]
-        earliest_acceptable_date = datetime.strptime(EARLIEST_ACCEPTABLE_DATE, "%Y-%m-%d").date()
-        latest_acceptable_date = datetime.strptime(LATEST_ACCEPTABLE_DATE, "%Y-%m-%d").date()
-        if earliest_acceptable_date <= earliest_available_date <= latest_acceptable_date:
-            # Check if the earliest available date falls in any of the excluded date ranges
-            excluded = False
-            for i, (start, end) in enumerate(EXCLUSION_DATE_RANGES, 1):
-                if datetime.strptime(start, "%Y-%m-%d").date() <= earliest_available_date <= datetime.strptime(end, "%Y-%m-%d").date():
-                    log_message(f"UH OH! Date falls in excluded date range: {start} to {end}")
-                    excluded = True
-                    break
-            if excluded:
-                sleep(DATE_REQUEST_DELAY)
-                continue
+        matching_dates = acceptable_dates(dates)
+        if matching_dates:
+            earliest_available_date = matching_dates[0]
             log_message(f"FOUND SLOT ON {earliest_available_date}!!!")
             try:
                 if legacy_reschedule(driver, earliest_available_date):
@@ -328,7 +337,7 @@ def reschedule(driver: WebDriver, retryCount: int = 0) -> bool:
                 traceback.print_exc()
                 continue
         else:
-            log_message(f"Earliest available date is {earliest_available_date}")
+            log_message(f"Earliest available date is {min(dates)}")
         sleep(DATE_REQUEST_DELAY)
     return False
 
