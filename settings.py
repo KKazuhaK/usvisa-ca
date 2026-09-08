@@ -71,6 +71,26 @@ GMAIL_APPLICATION_PWD = os.getenv("GMAIL_APPLICATION_PWD")
 RECEIVER_NAME = os.getenv("RECEIVER_NAME")
 RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 
+# Generic SMTP notifications. Existing Gmail settings remain supported as
+# backwards-compatible defaults.
+SMTP_HOST = os.getenv("SMTP_HOST") or ("smtp.gmail.com" if GMAIL_EMAIL else "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_SECURITY = os.getenv("SMTP_SECURITY", "starttls").strip().lower()
+SMTP_USERNAME = os.getenv("SMTP_USERNAME") or GMAIL_EMAIL or ""
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") or GMAIL_APPLICATION_PWD or ""
+SMTP_FROM = os.getenv("SMTP_FROM") or (
+    f"{GMAIL_SENDER_NAME or GMAIL_EMAIL} <{GMAIL_EMAIL}>" if GMAIL_EMAIL else ""
+)
+SMTP_TO = os.getenv("SMTP_TO") or (
+    f"{RECEIVER_NAME or RECEIVER_EMAIL} <{RECEIVER_EMAIL}>"
+    if RECEIVER_EMAIL else ""
+)
+
+# Telegram notifications
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+NOTIFY_ON_STARTUP = env_bool("NOTIFY_ON_STARTUP", False)
+
 # Override with local, for developers
 # from local import *
 

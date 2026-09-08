@@ -1,7 +1,10 @@
 import re
 import os
+import smtplib
+import ssl
 import traceback
 from datetime import datetime
+from email.message import EmailMessage
 from time import sleep
 from typing import Union, List
 
@@ -14,7 +17,6 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-from legacy.gmail import GMail, Message
 from legacy_rescheduler import legacy_reschedule
 from request_tracker import RequestTracker
 from settings import *
@@ -66,28 +68,82 @@ def validate_settings() -> None:
     latest = datetime.strptime(LATEST_ACCEPTABLE_DATE, "%Y-%m-%d").date()
     if earliest > latest:
         raise ValueError("EARLIEST_ACCEPTABLE_DATE must not be after LATEST_ACCEPTABLE_DATE")
-
-
-def email_is_configured() -> bool:
-    return all((GMAIL_EMAIL, GMAIL_APPLICATION_PWD, RECEIVER_EMAIL))
-
-
-def send_email(subject: str, text: str) -> None:
-    if not email_is_configured():
-        log_message("Email notification skipped because Gmail settings are incomplete")
-        return
-    try:
-        gmail = GMail(f"{GMAIL_SENDER_NAME or GMAIL_EMAIL} <{GMAIL_EMAIL}>", GMAIL_APPLICATION_PWD)
-        msg = Message(
-            subject,
-            to=f"{RECEIVER_NAME or RECEIVER_EMAIL} <{RECEIVER_EMAIL}>",
-            text=text,
+    if SMTP_SECURITY not in {"starttls", "ssl", "none"}:
+        raise ValueError("SMTP_SECURITY must be one of: starttls, ssl, none")
+    if not 1 <= SMTP_PORT <= 65535:
+        raise ValueError("SMTP_PORT must be between 1 and 65535")
+    if bool(TELEGRAM_BOT_TOKEN) != bool(TELEGRAM_CHAT_ID):
+        raise ValueError(
+            "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be configured together"
         )
-        gmail.send(msg)
-        gmail.close()
+
+
+def smtp_is_configured() -> bool:
+    return all((SMTP_HOST, SMTP_FROM, SMTP_TO))
+
+
+def telegram_is_configured() -> bool:
+    return bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
+
+
+def send_smtp_notification(subject: str, text: str) -> bool:
+    if not smtp_is_configured():
+        return False
+    try:
+        message = EmailMessage()
+        message["Subject"] = subject
+        message["From"] = SMTP_FROM
+        message["To"] = SMTP_TO
+        message.set_content(text)
+
+        if SMTP_SECURITY == "ssl":
+            smtp = smtplib.SMTP_SSL(
+                SMTP_HOST,
+                SMTP_PORT,
+                timeout=20,
+                context=ssl.create_default_context(),
+            )
+        else:
+            smtp = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20)
+        with smtp:
+            smtp.ehlo()
+            if SMTP_SECURITY == "starttls":
+                smtp.starttls(context=ssl.create_default_context())
+                smtp.ehlo()
+            if SMTP_USERNAME:
+                smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+            smtp.send_message(message)
+        log_message("SMTP notification sent")
+        return True
     except Exception as error:
-        # A notification failure must never trigger another booking attempt.
-        log_message(f"Email notification failed: {error}")
+        log_message(f"SMTP notification failed: {error}")
+        return False
+
+
+def send_telegram_notification(subject: str, text: str) -> bool:
+    if not telegram_is_configured():
+        return False
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            data={"chat_id": TELEGRAM_CHAT_ID, "text": f"{subject}\n\n{text}"},
+            timeout=20,
+        )
+        response.raise_for_status()
+        log_message("Telegram notification sent")
+        return True
+    except Exception as error:
+        # Request exceptions can include the URL, which contains the bot token.
+        log_message(f"Telegram notification failed: {type(error).__name__}")
+        return False
+
+
+def send_notification(subject: str, text: str) -> None:
+    configured = smtp_is_configured() or telegram_is_configured()
+    send_smtp_notification(subject, text)
+    send_telegram_notification(subject, text)
+    if not configured:
+        log_message("Notification skipped because no SMTP or Telegram channel is configured")
 
 
 def date_is_excluded(appointment_date) -> bool:
@@ -325,7 +381,7 @@ def reschedule(driver: WebDriver, retryCount: int = 0) -> bool:
             log_message(f"FOUND SLOT ON {earliest_available_date}!!!")
             try:
                 if legacy_reschedule(driver, earliest_available_date):
-                    send_email(
+                    send_notification(
                         f"Visa Appointment Rescheduled for {earliest_available_date}",
                         f"Your visa appointment has been successfully rescheduled to {earliest_available_date} at {USER_CONSULATE} consulate.",
                     )
@@ -380,6 +436,12 @@ if __name__ == "__main__":
     log_message(f"User Consulate: {USER_CONSULATE}")
     log_message(f"Earliest Acceptable Date: {EARLIEST_ACCEPTABLE_DATE}")
     log_message(f"Latest Acceptable Date: {LATEST_ACCEPTABLE_DATE}")
+    if NOTIFY_ON_STARTUP:
+        send_notification(
+            "US Visa Rescheduler Started",
+            f"Monitoring {USER_CONSULATE} for dates from "
+            f"{EARLIEST_ACCEPTABLE_DATE} to {LATEST_ACCEPTABLE_DATE}.",
+        )
 
     if EXCLUSION_DATE_RANGES:
         log_message("Excluded Date Ranges:")
@@ -396,8 +458,4 @@ if __name__ == "__main__":
             break
         sleep(NEW_SESSION_DELAY)
     mark_completed()
-    send_email(
-        f"Rescheduler Program Exited",
-        f"The rescheduler program has exited on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.",
-    )
     idle_after_completion()
