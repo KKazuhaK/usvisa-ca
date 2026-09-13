@@ -74,6 +74,8 @@ delete `data/reschedule-complete`, update `.env`, and start it again.
 Failed browser sessions save screenshots under `data/diagnostics` to make
 headless login and site-layout problems easier to diagnose. Review screenshots
 for personal information before sharing them.
+Appointment date controls are allowed up to 30 seconds to appear after selecting
+a consulate; login waits remain 10 seconds and date checks remain 180 seconds apart.
 
 ### Notifications
 

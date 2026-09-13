@@ -112,6 +112,8 @@ DETACH = True
 NEW_SESSION_AFTER_FAILURES = 5
 NEW_SESSION_DELAY = 300
 TIMEOUT = 10
+# Appointment date controls can take longer to appear after selecting a consulate.
+DATE_CONTROL_TIMEOUT = 30
 FAIL_RETRY_DELAY = 180
 DATE_REQUEST_DELAY = 180
 DATE_REQUEST_MAX_RETRY = 5

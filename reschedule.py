@@ -292,7 +292,10 @@ def _prepare_appointment_page(driver: WebDriver) -> None:
             Select(facility).select_by_value(str(CONSULATE_ID))
             log_message(f"Selected {USER_CONSULATE} consulate")
             sleep(2)
-            continue
+            WebDriverWait(driver, DATE_CONTROL_TIMEOUT).until(
+                lambda current_driver: _appointment_page_state(current_driver) == "ready"
+            )
+            return
         if state == "schedule":
             _click_action_if_present(driver, "Schedule Appointment", timeout)
             continue
@@ -306,7 +309,7 @@ def _prepare_appointment_page(driver: WebDriver) -> None:
         )
         continue_button.click()
 
-    WebDriverWait(driver, timeout).until(
+    WebDriverWait(driver, DATE_CONTROL_TIMEOUT).until(
         lambda current_driver: _appointment_page_state(current_driver) == "ready"
     )
 
